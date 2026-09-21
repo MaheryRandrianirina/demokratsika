@@ -1,0 +1,88 @@
+name: demokratsika
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports: ["8080:8080"]
+    env_file: .env
+    volumes:
+      - ./:/app
+      - /app/vendor          # volume anonyme : protège vendor/ du bind mount
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  pg:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: demokratsika
+      POSTGRES_PASSWORD: secret
+    volumes: ["pg-data:/var/lib/postgresql"]
+    healthcheck:
+      # -h 127.0.0.1 force un test TCP : "healthy" seulement quand le port 3306
+      # écoute vraiment (le socket local répondrait déjà pendant l'init MySQL).
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "demokratsika"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports: ["8082:80"]
+    environment:
+      PMA_HOST: pg
+      PMA_USER: postgres
+      PMA_PASSWORD: secret
+    depends_on:
+      pg:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    volumes: ["redis-data:/data"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    entrypoint: php artisan horizon
+    env_file: .env
+    volumes:
+      - ./:/app
+      - /app/vendor
+    # Désactive le healthcheck hérité de l'image FrankenPHP : ce service lance
+    # Horizon, pas le serveur FrankenPHP, donc ce test échouerait toujours.
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    entrypoint: php artisan reverb:start --host=0.0.0.0 --port=8083 --debug
+    ports: ["8083:8083"]
+    env_file: .env
+    volumes:
+      - ./:/app
+      - /app/vendor
+    # Idem : Reverb est un serveur WebSocket (ReactPHP), pas FrankenPHP.
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+  redis-data:
