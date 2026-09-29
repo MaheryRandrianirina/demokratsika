@@ -8,7 +8,7 @@ RUN apk add --no-cache \
     imagemagick
 
 RUN install-php-extensions \
-    pdo_mysql pcntl opcache zip redis intl xdebug
+    pdo_pgsql pcntl opcache zip redis intl xdebug
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
