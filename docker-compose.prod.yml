@@ -13,6 +13,7 @@ x-app: &app
     environment:
         APP_ENV: production
         APP_DEBUG: 'false'
+        INERTIA_SSR_URL: http://ssr:13714
     restart: unless-stopped
     volumes:
         # Fichiers uploadés (disques local/public) : persistés hors de l'image.
@@ -41,6 +42,20 @@ services:
             <<: *backing-services
             migrate:
                 condition: service_completed_successfully
+            ssr:
+                condition: service_started
+
+    # Serveur Node de rendu côté serveur Inertia, interne au réseau Compose.
+    # S'il tombe, Laravel bascule automatiquement sur le rendu client.
+    ssr:
+        <<: *app
+        command: ['php', 'artisan', 'inertia:start-ssr']
+        healthcheck:
+            test: ['CMD', 'curl', '-fsS', 'http://localhost:13714/health']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
 
     worker:
         <<: *app

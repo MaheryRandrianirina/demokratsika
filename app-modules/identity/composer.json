@@ -1,0 +1,24 @@
+{
+	"name": "demokratsika/identity",
+	"description": "",
+	"type": "library",
+	"version": "1.0",
+	"license": "proprietary",
+	"require": {},
+	"autoload": {
+		"psr-4": {
+			"Demokratsika\\Identity\\": "src/",
+			"Demokratsika\\Identity\\Tests\\": "tests/",
+			"Demokratsika\\Identity\\Database\\Factories\\": "database/factories/",
+			"Demokratsika\\Identity\\Database\\Seeders\\": "database/seeders/"
+		}
+	},
+	"minimum-stability": "stable",
+	"extra": {
+		"laravel": {
+			"providers": [
+				"Demokratsika\\Identity\\Providers\\IdentityServiceProvider"
+			]
+		}
+	}
+}

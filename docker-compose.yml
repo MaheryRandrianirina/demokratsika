@@ -33,6 +33,9 @@ services:
         ports: ['8080:8080']
         environment:
             SYNC_COMPOSER: 1
+            # public/hot pointe vers localhost:5173 (navigateur) : le rendu SSR de
+            # dev doit joindre le service vite par le réseau Compose.
+            INERTIA_SSR_HOT_URL: http://vite:5173
         healthcheck:
             test: ['CMD', 'curl', '-fsS', 'http://localhost:8080/up']
             interval: 10s

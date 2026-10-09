@@ -7,7 +7,7 @@ import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     plugins: lazyPlugins(() => [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
@@ -28,7 +28,14 @@ export default defineConfig({
             formVariants: true,
         }),
     ]),
+    ssr: {
+        // Bundle every dependency so the production SSR server runs without
+        // node_modules. The dev server keeps loading them from node_modules.
+        noExternal: command === 'build' ? true : undefined,
+    },
     server: {
+        // Lets the Docker `app` container reach the dev SSR endpoint at http://vite:5173.
+        allowedHosts: ['vite'],
         watch: {
             ignored: [
                 '**/.agents/**',
@@ -74,4 +81,4 @@ export default defineConfig({
             entryPoint: 'resources/css/app.css',
         },
     },
-});
+}));

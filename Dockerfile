@@ -22,15 +22,19 @@ RUN apk add --no-cache nodejs npm
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci --no-audit --no-fund
 COPY --from=composer-build /app /app
-RUN npm run build
+RUN npm run build:ssr
 
 FROM base AS runtime
 
-RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+# Node exécute le serveur SSR Inertia (service `ssr`). Le bundle embarque toutes
+# ses dépendances (ssr.noExternal) : pas besoin de node_modules au runtime.
+RUN apk add --no-cache nodejs \
+    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY docker/php/production.ini "$PHP_INI_DIR/conf.d/zz-production.ini"
 
 COPY --from=composer-build /app /app
 COPY --from=frontend-build /app/public/build /app/public/build
+COPY --from=frontend-build /app/bootstrap/ssr /app/bootstrap/ssr
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Le code reste propriété de root (lecture seule pour l'app) ; seuls storage/,
