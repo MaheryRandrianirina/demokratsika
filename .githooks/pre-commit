@@ -1,0 +1,38 @@
+#!/bin/sh
+set -e
+
+cd "$(git rev-parse --show-toplevel)/api" || exit 1
+
+if ! docker compose ps --status running --services 2>/dev/null | grep -qx app; then
+    echo "✖ Le conteneur Docker \"app\" n'est pas démarré."
+    echo "  Lancez-le avec : docker compose up -d"
+    exit 1
+fi
+
+echo "▶ Vérification du style de code (Pint)…"
+STAGED_PHP=$(git diff --cached --name-only --diff-filter=ACM --relative -- '*.php')
+
+if [ -n "$STAGED_PHP" ]; then
+    ./vendor/bin/pint $STAGED_PHP
+    docker compose exec -T app ./vendor/bin/pint $STAGED_PHP
+    if [ $? -ne 0 ]; then
+        echo "✖ Pint n'a pas pu corriger le style automatiquement."
+        exit 1
+    fi
+    git add $STAGED_PHP
+    echo "  Pint a corrigé et réindexé les fichiers si nécessaire."
+else
+    echo "  Aucun fichier PHP indexé, étape ignorée."
+fi
+
+echo "▶ Analyse statique en cours (Larastan)…"
+docker compose exec -T app ./vendor/bin/phpstan analyse --memory-limit=1G || exit 1
+
+echo "✔ Vérifications pre-commit réussies."
+
+DOCKER_CHANGES=$(git diff --cached --name-only | grep -E '^(Dockerfile|docker-compose|docker/)' || true)
+if [ -n "$DOCKER_CHANGES" ]; then
+    echo "⚠ Vous modifiez des fichiers liés à Docker :"
+    echo "$DOCKER_CHANGES"
+    echo "Assurez-vous que cela soit revu par l'équipe DevOps avant de merger."
+fi

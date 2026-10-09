@@ -1,0 +1,20 @@
+#!/bin/sh
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -n1 "$COMMIT_MSG_FILE")
+
+PATTERN='^(feat|fix|chore|refactor|docs|style|test|perf|ci|build|revert)(\(.+\))?!?: .{1,200}$'
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo "✖ Format de message de commit invalide."
+    echo ""
+    echo "  Votre message : \"$COMMIT_MSG\""
+    echo ""
+    echo "  Format attendu : <type>(<portée optionnelle>): <description>"
+    echo "  Types autorisés : feat, fix, chore, refactor, docs, style, test, perf, ci, build, revert"
+    echo ""
+    echo "  Exemples :"
+    echo "    feat(auth): ajouter le flux de réinitialisation du mot de passe"
+    echo "    fix: corriger la vérification null lors de la recherche d'utilisateur"
+    echo "    chore(deps): mettre à jour laravel/framework vers ^13.1"
+    exit 1
+fi

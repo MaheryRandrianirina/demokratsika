@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+cd "$(git rev-parse --show-toplevel)/api" || exit 1
+
+if ! docker compose ps --status running --services 2>/dev/null | grep -qx app; then
+    echo "✖ Le conteneur Docker \"app\" n'est pas démarré."
+    echo "  Lancez-le avec : docker compose up -d"
+    exit 1
+fi
+
+echo "▶ Exécution de la suite de tests complète avant le push…"
+docker compose exec -T app php artisan test --parallel || exit 1
+echo "✔ Tests réussis."

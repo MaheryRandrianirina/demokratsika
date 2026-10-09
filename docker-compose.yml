@@ -1,89 +1,112 @@
 name: demokratsika
 
+# Configuration commune aux services qui exécutent l'application : une seule
+# image (demokratsika-dev) partagée, construite une fois.
+x-app: &app
+    build:
+        context: .
+        dockerfile: Dockerfile.dev
+    image: demokratsika-dev
+    env_file: .env
+    volumes:
+        - ./:/app
+        # Volumes nommés : protègent les dépendances Linux du bind mount, et sont
+        # resynchronisés par docker/dev-entrypoint.sh quand un lockfile change.
+        - vendor:/app/vendor
+        - node_modules:/app/node_modules
+    restart: unless-stopped
+
+# Les services secondaires attendent que `app` ait fini d'installer vendor/.
+x-after-app: &after-app
+    depends_on:
+        app:
+            condition: service_healthy
+    # Le healthcheck hérité de FrankenPHP n'a pas de sens hors du serveur web.
+    healthcheck:
+        disable: true
+
 services:
     app:
-        build:
-            context: .
-            dockerfile: Dockerfile.dev
+        <<: *app
         ports: ['8080:8080']
-        env_file: .env
-        volumes:
-            - ./:/app
-            - /app/vendor # volume anonyme : protège vendor/ du bind mount
-            - /app/node_modules # volume anonyme : protège node_modules/ du bind mount
+        environment:
+            SYNC_COMPOSER: 1
+        healthcheck:
+            test: ['CMD', 'curl', '-fsS', 'http://localhost:8080/up']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            # Laisse le temps à un `composer install` au démarrage.
+            start_period: 180s
         depends_on:
             pg:
                 condition: service_healthy
             redis:
-                condition: service_started
+                condition: service_healthy
+
+    vite:
+        <<: [*app, *after-app]
+        command: ['npm', 'run', 'dev']
+        ports: ['5173:5173']
+        environment:
+            SYNC_NPM: 1
+            # Mode conteneur de laravel-vite-plugin : écoute sur 0.0.0.0:5173 mais
+            # écrit http://localhost:5173 dans public/hot pour le navigateur.
+            LARAVEL_SAIL: 1
+
+    worker:
+        <<: [*app, *after-app]
+        command: ['php', 'artisan', 'horizon']
+
+    scheduler:
+        <<: [*app, *after-app]
+        command: ['php', 'artisan', 'schedule:work']
 
     pg:
         image: postgres:18-alpine
+        restart: unless-stopped
+        # Mêmes identifiants que l'application (interpolés depuis .env).
         environment:
-            POSTGRES_DB: demokratsika-db
-            POSTGRES_PASSWORD: secret
+            POSTGRES_DB: ${DB_DATABASE:-demokratsika-db}
+            POSTGRES_USER: ${DB_USERNAME:-postgres}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
         volumes: ['pg-data:/var/lib/postgresql']
         healthcheck:
-            # -h 127.0.0.1 force un test TCP : "healthy" seulement quand le port 3306
-            # écoute vraiment (le socket local répondrait déjà pendant l'init MySQL).
-            test: ['CMD', 'pg_isready', '-U', 'postgres', '-d', 'demokratsika']
+            # -h 127.0.0.1 force un test TCP : "healthy" seulement quand Postgres
+            # écoute vraiment (le socket local répond déjà pendant l'init).
+            test:
+                [
+                    'CMD-SHELL',
+                    'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"',
+                ]
             interval: 5s
             timeout: 5s
             retries: 10
             start_period: 30s
 
+    redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+        volumes: ['redis-data:/data']
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 5s
+            timeout: 3s
+            retries: 10
+
     adminer:
         image: adminer
         restart: unless-stopped
-        ports: ['8082:80']
+        # Interface d'admin BDD : exposée uniquement en local, pas sur le réseau.
+        ports: ['127.0.0.1:8082:8080']
         environment:
-            PMA_HOST: pg
-            PMA_USER: postgres
-            PMA_PASSWORD: secret
+            ADMINER_DEFAULT_SERVER: pg
         depends_on:
             pg:
                 condition: service_healthy
 
-    redis:
-        image: redis:7-alpine
-        volumes: ['redis-data:/data']
-
-    worker:
-        build:
-            context: .
-            dockerfile: Dockerfile.dev
-        entrypoint: php artisan horizon
-        env_file: .env
-        volumes:
-            - ./:/app
-            - /app/vendor
-        # Désactive le healthcheck hérité de l'image FrankenPHP : ce service lance
-        # Horizon, pas le serveur FrankenPHP, donc ce test échouerait toujours.
-        healthcheck:
-            disable: true
-        depends_on:
-            redis:
-                condition: service_started
-        restart: unless-stopped
-
-    reverb:
-        build:
-            context: .
-            dockerfile: Dockerfile.dev
-        entrypoint: php artisan reverb:start --host=0.0.0.0 --port=8083 --debug
-        ports: ['8083:8083']
-        env_file: .env
-        volumes:
-            - ./:/app
-            - /app/vendor
-        # Idem : Reverb est un serveur WebSocket (ReactPHP), pas FrankenPHP.
-        healthcheck:
-            disable: true
-        depends_on:
-            redis:
-                condition: service_started
-        restart: unless-stopped
-
 volumes:
     pg-data:
     redis-data:
+    vendor:
+    node_modules:
