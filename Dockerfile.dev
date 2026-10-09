@@ -29,8 +29,9 @@ COPY . .
 COPY docker/dev-entrypoint.sh /usr/local/bin/dev-entrypoint
 RUN chmod +x /usr/local/bin/dev-entrypoint
 
+# Pas d'ENV APP_ENV ici : il écraserait APP_ENV=testing de phpunit.xml (CSRF actif,
+# tests en échec). L'environnement vient de .env.
 ENV SERVER_NAME=":8080"
-ENV APP_ENV=local
 EXPOSE 8080
 
 ENTRYPOINT ["dev-entrypoint"]

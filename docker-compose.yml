@@ -7,7 +7,9 @@ x-app: &app
         context: .
         dockerfile: Dockerfile.dev
     image: demokratsika-dev
-    env_file: .env
+    # Pas d'env_file : Laravel lit /app/.env via le bind mount. Injecter .env en
+    # variables d'environnement écraserait phpunit.xml et lancerait les tests sur
+    # la base de dev (RefreshDatabase la viderait).
     volumes:
         - ./:/app
         # Volumes nommés : protègent les dépendances Linux du bind mount, et sont
