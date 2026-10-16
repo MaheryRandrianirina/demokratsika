@@ -6,6 +6,10 @@ x-app: &app
     build:
         context: .
         dockerfile: Dockerfile.dev
+        # Réseau de l'hôte pendant le build : sous Ubuntu, les conteneurs de build
+        # ne résolvent pas toujours le DNS (systemd-resolved), et apk /
+        # install-php-extensions échouent.
+        network: host
     image: demokratsika-dev
     # Pas d'env_file : Laravel lit /app/.env via le bind mount. Injecter .env en
     # variables d'environnement écraserait phpunit.xml et lancerait les tests sur
